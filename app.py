@@ -127,6 +127,7 @@ def init_db(conn: Connection):
     # conn.execute("""INSERT INTO stockTable
     #                 VALUES (
     #                 100)""")
+    # c.execute("UPDATE stockTable SET stock_units = ?", (90,))
     conn.commit()
 
 def add_employee(firstname, lastname, address1, address2, city, state, zipcode, ssn, withholding, salary):
@@ -247,7 +248,7 @@ def main():
             "View Vendor", "Add Vendor",
             "Pay Employee", "View Payroll History",
             "View Balanced Sheet", "View Income Statement",
-            "View Inventory"]
+            "View Inventory", "Create Invoice"]
     choice = st.sidebar.selectbox("Menu", menu)
 
     if choice == "View Employees":
@@ -421,8 +422,6 @@ def main():
             d1 = pd.DataFrame(data1, columns = ['Income Statement', 'Value']).style.set_precision(2)
             st.dataframe(d1, height = 900)
 
-
-
     elif choice == "View Balanced Sheet":
         st.subheader("View Balanced Sheet")
 
@@ -580,6 +579,40 @@ def main():
         total_val = stock_units[0][0] * price_per_unit_sum
         d2 = pd.DataFrame([[stock_units[0][0], total_val]], columns = ['Complete Units in Stock', 'Total Value']).style.set_precision(2)
         st.dataframe(d2)
+
+    elif choice == "Create Invoice": # Make a Sale to customer
+        st.subheader("Create Invoice")
+
+        # Display all customers
+        st.write("View all customers")
+        result = view_all_customer()
+        clean_db = pd.DataFrame(result, columns = ["Company Name", "First Name", "Last Name", "Address1", "Address2", "City", "State", "Zipcode", "Price"])
+        st.dataframe(clean_db)
+
+        # Select a customer to invoice
+        c.execute('SELECT DISTINCT firstname, lastname FROM customerTable')
+        cus_data = c.fetchall()
+        customer_first_name = [str(i[0]) for i in cus_data]
+        selected_invoice_customer = st.selectbox("Please select a customer", customer_first_name)
+        purchase_num = st.text_input("Number of Unit to Invoice")
+        if st.button("Create Invoice"):
+            st.success("Invoice sent successfully.")
+            purchase_num = float(purchase_num)
+            # Get price of the selected Customer
+            c.execute("SELECT price, firstname FROM customerTable WHERE firstname = ?", (selected_invoice_customer,))
+            cus_data = c.fetchall()
+            cus_info = cus_data
+            price = float(cus_info[0][0])
+            cus_firstname = cus_info[0][1]
+
+            invoice_price = purchase_num * price
+            # Update Stock Table
+            c.execute('SELECT stock_units FROM stockTable LIMIT 1')
+            stock_units = c.fetchall()
+            remain_stock_units = stock_units[0][0] - purchase_num
+            #st.write(remain_stock_units)
+            c.execute("UPDATE stockTable SET stock_units = ?", (remain_stock_units,))
+            conn.commit()
 
 if __name__ == '__main__':
     main()
