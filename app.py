@@ -285,6 +285,10 @@ def main():
         st.dataframe(clean_db)
 
         employee_first_name = [str(i[0]) for i in view_all_employees_name()]
+        # Test: fetching database data by index
+        # c.execute('SELECT DISTINCT firstname, lastname FROM employeeTable')
+        # data = c.fetchall()
+        # st.write(data[0][1])
 
         selected_pay_employee = st.selectbox("Employee name", employee_first_name)
         # st.write(selected_pay_employee)
@@ -298,34 +302,34 @@ def main():
             localtime = time.localtime()
             time_string_payEmployee = time.strftime("%Y-%m-%d %H:%M:%S", localtime)
             # get BS data before payment
-            data = get_bs_nearest(time_string_payEmployee)
+            bs_data = get_bs_nearest(time_string_payEmployee)
             # add BS data after payment
             add_bs(
-                   data[0][0] - salary, # cash - salary
-                   data[0][1],
-                   data[0][2],
-                   data[0][3],
-                   data[0][4],
-                   data[0][5],
-                   data[0][6],
-                   data[0][7],
-                   data[0][8],
+                   bs_data[0][0] - salary, # cash - salary
+                   bs_data[0][1],
+                   bs_data[0][2],
+                   bs_data[0][3],
+                   bs_data[0][4],
+                   bs_data[0][5],
+                   bs_data[0][6],
+                   bs_data[0][7],
+                   bs_data[0][8],
                    time_string_payEmployee
                    )
-            data = get_pl_nearest(time_string_payEmployee)
-            # add PL data after payment
+            pl_data = get_pl_nearest(time_string_payEmployee)
+            # add PL pl_data after payment
             add_pl(
-                   data[0][0],
-                   data[0][1],
-                   data[0][2] + 0.9*salary,
-                   data[0][3] + 0.1*salary,
-                   data[0][4],
-                   data[0][5],
+                   pl_data[0][0],
+                   pl_data[0][1],
+                   pl_data[0][2] + 0.9*salary,
+                   pl_data[0][3] + 0.1*salary,
+                   pl_data[0][4],
+                   pl_data[0][5],
                    time_string_payEmployee
                    )
             # Add Payroll History
-            data = get_payroll_history_nearest(time_string_payEmployee)
-            add_payroll_history(time_string_payEmployee, employee_firstname, salary, data[0][8], data[0][9])
+            payroll_history_data = get_payroll_history_nearest(time_string_payEmployee)
+            add_payroll_history(time_string_payEmployee, employee_firstname, salary, payroll_history_data[0][8], payroll_history_data[0][9])
 
             # Show UPDATED BS
             after_localtime = time.localtime()
@@ -512,6 +516,17 @@ def main():
     elif choice == "View Inventory":
         st.subheader("View Inventory")
         result = view_all_inventory()
-        st.dataframe(result)
+        st.dataframe(result.style.set_precision(2))
+
+        c.execute('SELECT price_per_unit, Value FROM inventoryTable')
+        data = c.fetchall()
+        price_per_unit_sum = 0
+        total_value_sum = 0
+        for i in data:
+            price_per_unit_sum += i[0]
+            total_value_sum += i[1]
+        d1 = pd.DataFrame([[price_per_unit_sum, total_value_sum]], columns = ['COG/Unit', 'Total Value of Inventory']).style.set_precision(2)
+        st.dataframe(d1)
+
 if __name__ == '__main__':
     main()
