@@ -128,6 +128,16 @@ def init_db(conn: Connection):
     #                 VALUES (
     #                 100)""")
     # c.execute("UPDATE stockTable SET stock_units = ?", (90,))
+    # Invoice History
+    #conn.execute('DROP TABLE invoiceHistoryTable')
+    conn.execute('CREATE TABLE IF NOT EXISTS invoiceHistoryTable(date REAL, customer TEXT, quantity REAL, price_per_unit REAL, total REAL)')
+    # conn.execute("""INSERT INTO invoiceHistoryTable VALUES(
+    #                 julianday('now', 'localtime'),
+    #                 'Smith Co.',
+    #                 5,
+    #                 2.5,
+    #                 12.5
+    #                 )""")
     conn.commit()
 
 def add_employee(firstname, lastname, address1, address2, city, state, zipcode, ssn, withholding, salary):
@@ -200,6 +210,11 @@ def get_payroll_history_nearest(nearest_time):
     data = c.fetchall()
     return data
 
+# def get_invoice_history_nearest(nearest_time):
+#     c.execute("SELECT * FROM invoiceHistoryTable ORDER BY abs(julianday(?) - date) LIMIT 1 ", (nearest_time,))
+#     data = c.fetchall()
+#     return data
+
 def add_payroll_history(date, firstname, salary, total_disbursement, total_withholding):
 
     fed = salary * 0.22
@@ -208,6 +223,10 @@ def add_payroll_history(date, firstname, salary, total_disbursement, total_withh
     disbursement = salary - fed - soc - med
     withholding = fed + soc + med
     conn.execute('INSERT INTO payrollHistoryTable VALUES(julianday(?),?,?,?,?,?,?,?,?,?)', (date, firstname, salary, disbursement, withholding, fed, soc, med, total_disbursement + disbursement, total_withholding + withholding))
+    conn.commit()
+
+def add_invoice_history(date, customer, quantity, price_per_unit, total):
+    conn.execute('INSERT INTO invoiceHistoryTable VALUES(julianday(?),?,?,?,?)', (date, customer, quantity, price_per_unit, total))
     conn.commit()
 
 def view_all_inventory():
@@ -248,7 +267,7 @@ def main():
             "View Vendor", "Add Vendor",
             "Pay Employee", "View Payroll History",
             "View Balanced Sheet", "View Income Statement",
-            "View Inventory", "Create Invoice"]
+            "View Inventory", "Create Invoice", "View Invoice History"]
     choice = st.sidebar.selectbox("Menu", menu)
 
     if choice == "View Employees":
@@ -361,13 +380,13 @@ def main():
             pl_data = get_pl_nearest(time_string_payEmployee)
             # add PL pl_data after payment
             add_pl(
-                   pl_data[0][0],
-                   pl_data[0][1],
-                   pl_data[0][2] + 0.9*salary,
-                   pl_data[0][3] + 0.1*salary,
-                   pl_data[0][4],
-                   pl_data[0][5],
-                   time_string_payEmployee
+                   pl_data[0][0], # sales_revenue
+                   pl_data[0][1], # cogs
+                   pl_data[0][2] + 0.9*salary, # payroll
+                   pl_data[0][3] + 0.1*salary, # payroll_withholding
+                   pl_data[0][4], # medicare
+                   pl_data[0][5], # annual_expenses
+                   time_string_payEmployee # date
                    )
             # Add Payroll History
             payroll_history_data = get_payroll_history_nearest(time_string_payEmployee)
@@ -590,29 +609,131 @@ def main():
         st.dataframe(clean_db)
 
         # Select a customer to invoice
-        c.execute('SELECT DISTINCT firstname, lastname FROM customerTable')
+        c.execute('SELECT DISTINCT company FROM customerTable')
         cus_data = c.fetchall()
-        customer_first_name = [str(i[0]) for i in cus_data]
-        selected_invoice_customer = st.selectbox("Please select a customer", customer_first_name)
+        customer_company_name = [str(i[0]) for i in cus_data]
+        selected_invoice_customer = st.selectbox("Please select a customer", customer_company_name)
         purchase_num = st.text_input("Number of Unit to Invoice")
         if st.button("Create Invoice"):
-            st.success("Invoice sent successfully.")
+            #st.success("Invoice sent successfully.")
+
             purchase_num = float(purchase_num)
+
             # Get price of the selected Customer
-            c.execute("SELECT price, firstname FROM customerTable WHERE firstname = ?", (selected_invoice_customer,))
+            c.execute("SELECT price, company FROM customerTable WHERE company = ?", (selected_invoice_customer,))
             cus_data = c.fetchall()
             cus_info = cus_data
-            price = float(cus_info[0][0])
-            cus_firstname = cus_info[0][1]
 
+            # get price_per_unit
+            c.execute('SELECT price_per_unit FROM inventoryTable')
+            inventory_data = c.fetchall()
+            price_per_unit_sum = 0
+            for i in inventory_data:
+                price_per_unit_sum += i[0]
+
+            price = float(cus_info[0][0])
+            cus_company = cus_info[0][1]
+            invoice_cogs = purchase_num * price_per_unit_sum
             invoice_price = purchase_num * price
+            st.success("Invoice sent successfully. Total invoice amount: {}.".format(invoice_price))
+            
             # Update Stock Table
             c.execute('SELECT stock_units FROM stockTable LIMIT 1')
             stock_units = c.fetchall()
             remain_stock_units = stock_units[0][0] - purchase_num
-            #st.write(remain_stock_units)
             c.execute("UPDATE stockTable SET stock_units = ?", (remain_stock_units,))
             conn.commit()
+
+            # Start updating BS and PL
+            # get time right now
+            localtime = time.localtime()
+            time_string_invoice = time.strftime("%Y-%m-%d %H:%M:%S", localtime)
+            # get BS data before invoice
+            bs_data = get_bs_nearest(time_string_invoice)
+            # add BS data after invoice
+            add_bs(
+                   bs_data[0][0], # cash
+                   bs_data[0][1] + invoice_price, # receivable + invoice_price
+                   bs_data[0][2], # inventory
+                   bs_data[0][3], # building
+                   bs_data[0][4], # equipment
+                   bs_data[0][5], # payable
+                   bs_data[0][6], # notes_payable
+                   bs_data[0][7], # accurals
+                   bs_data[0][8], # mortgage
+                   time_string_invoice # date
+                   )
+            pl_data = get_pl_nearest(time_string_invoice)
+            # add PL pl_data after payment
+            add_pl(
+                   pl_data[0][0] + invoice_price, # sales_revenue
+                   pl_data[0][1] + invoice_cogs, # cogs
+                   pl_data[0][2], # payroll
+                   pl_data[0][3], # payroll_withholding
+                   pl_data[0][4], # medicare
+                   pl_data[0][5], # annual_expenses
+                   time_string_invoice # date
+                   )
+            # Add Invoice History
+            # invoice_history_data = get_invoice_history_nearest(time_string_invoice)
+            add_invoice_history(time_string_invoice, cus_company, purchase_num, price, invoice_price)
+
+            # Show UPDATED BS
+            after_localtime = time.localtime()
+            after_time_string_invoice = time.strftime("%Y-%m-%d %H:%M:%S", after_localtime)
+            bs_data = get_bs_nearest(after_time_string_invoice)
+            st.write("Balanced sheet updated:")
+            data1 = [['Cash', bs_data[0][0]],
+                    ['Account Receivable', bs_data[0][1]],
+                    ['Inventory', bs_data[0][2]],
+                    ['Total Current Assets', bs_data[0][0] + bs_data[0][1] + bs_data[0][2]],
+                    ['Buildings', bs_data[0][3]],
+                    ['Equipment', bs_data[0][4]],
+                    ['Total Fixed Assets', bs_data[0][3] + bs_data[0][4]],
+                    ['Total Assets', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4]]]
+            d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
+            data2 = [['Accounts Payable', bs_data[0][5]],
+                    ['Notes Payable', bs_data[0][6]],
+                    ['Accurals', bs_data[0][7]],
+                    ['Total Current Liabilities', bs_data[0][5] + bs_data[0][6] + bs_data[0][7]],
+                    ['Mortgage', bs_data[0][8]],
+                    ['Total Long Term Debt', bs_data[0][8]],
+                    #['Total Liabilities', total_liabilities],
+                    ['Net Worth', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4] - (bs_data[0][5] + bs_data[0][6] + bs_data[0][7] + bs_data[0][8])],
+                    ['Total', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4] ]]
+            d2 = pd.DataFrame(data2, columns = ['Liabilities & Net Worth', 'Values'])
+            result = pd.concat([d1, d2], axis=1).reindex(d2.index).style.set_precision(2)
+            st.write(result)
+
+            # Show UPDATED PL
+            # after_localtime = time.localtime()
+            # after_time_string_invoice = time.strftime("%Y-%m-%d %H:%M:%S", after_localtime)
+            data = get_pl_nearest(after_time_string_invoice)
+            st.write("Income Statement updated:")
+            gross_profit = data[0][0] - data[0][1]
+            total_expenses = data[0][2] + data[0][3] + data[0][4] + data[0][5]
+            ebt = gross_profit - total_expenses
+            data1 = [['Sales Revenue', data[0][0]],
+                    ['COGS', data[0][1]],
+                    ['Gross Profit', gross_profit],
+                    ['Payroll', data[0][2]],
+                    ['Payroll Withholding', data[0][3]],
+                    ['Medicare', data[0][4]],
+                    ['Annual Expenses', data[0][5]],
+                    ['Total Expenses', total_expenses],
+                    ['Earnings Before Taxes', ebt],
+                    ['Taxes', 0.20 * ebt],
+                    ['Net Income', ebt - 0.20*ebt]]
+            d1 = pd.DataFrame(data1, columns = ['Income Statement', 'Value']).style.set_precision(2)
+            st.dataframe(d1, height = 900)
+    elif choice == "View Invoice History":
+        st.subheader("View Invoice History")
+        # View Invoice History
+        query = conn.execute("SELECT date(date), Customer, Quantity, price_per_unit, Total FROM invoiceHistoryTable")
+        #cols = [column[0] for column in query.description]
+        cols = ["Date", "Customer", "Quantity", "Price/Part", "Total"]
+        results = pd.DataFrame.from_records(data = query.fetchall(), columns = cols).style.set_precision(2)
+        st.dataframe(results)
 
 if __name__ == '__main__':
     main()
