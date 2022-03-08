@@ -66,6 +66,26 @@ def init_db(conn: Connection):
     # conn.execute("""DELETE FROM payrollHistoryTable WHERE employee = 'Colin';""")
     #Delete data
     # conn.execute("""DELETE FROM employeeTable WHERE firstname = 'Kai-Lin';""")
+
+    # Inventory
+    #conn.execute('DROP TABLE inventoryTable')
+    conn.execute('CREATE TABLE IF NOT EXISTS inventoryTable(Part TEXT, price_per_unit REAL, Quantity REAL, Value REAL, Reorder TEXT)')
+    # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
+    #                 VALUES (
+    #                 'Axles',
+    #                 0.01,
+    #                 330000,
+    #                 3300,
+    #                 'No')""")
+
+    # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
+    #                 VALUES (
+    #                 'Screw',
+    #                 0.02,
+    #                 48250,
+    #                 965,
+    #                 'No')""")
+
     conn.commit()
 
 def add_employee(firstname, lastname, address1, address2, city, state, zipcode, ssn, withholding, salary):
@@ -148,10 +168,11 @@ def add_payroll_history(date, firstname, salary, total_disbursement, total_withh
     conn.execute('INSERT INTO payrollHistoryTable VALUES(julianday(?),?,?,?,?,?,?,?,?,?)', (date, firstname, salary, disbursement, withholding, fed, soc, med, total_disbursement + disbursement, total_withholding + withholding))
     conn.commit()
 
-# def get_blog_by_title(title):
-#     c.execute('SELECT * FROM blogtable WHERE title = "{}"'.format(title))
-#     data = c.fetchall()
-#     return data
+def view_all_inventory():
+    query = conn.execute("SELECT * FROM inventoryTable")
+    cols = [column[0] for column in query.description]
+    results = pd.DataFrame.from_records(data = query.fetchall(), columns = cols)
+    return results
 
 
 
@@ -183,7 +204,9 @@ def main():
     menu = ["View Employees", "Add Employees",
             "View Customer", "Add Customer",
             "View Vendor", "Add Vendor",
-            "Pay Employee", "View Payroll History", "View Balanced Sheet", "View Income Statement"]
+            "Pay Employee", "View Payroll History",
+            "View Balanced Sheet", "View Income Statement",
+            "View Inventory"]
     choice = st.sidebar.selectbox("Menu", menu)
 
     if choice == "View Employees":
@@ -278,7 +301,7 @@ def main():
             data = get_bs_nearest(time_string_payEmployee)
             # add BS data after payment
             add_bs(
-                   data[0][0] - salary,
+                   data[0][0] - salary, # cash - salary
                    data[0][1],
                    data[0][2],
                    data[0][3],
@@ -307,26 +330,26 @@ def main():
             # Show UPDATED BS
             after_localtime = time.localtime()
             after_time_string_payEmployee = time.strftime("%Y-%m-%d %H:%M:%S", after_localtime)
-            data = get_bs_nearest(after_time_string_payEmployee)
+            bs_data = get_bs_nearest(after_time_string_payEmployee)
             st.write("Balanced sheet updated:")
-            data1 = [['Cash', data[0][0]],
-                    ['Account Receivable', data[0][1]],
-                    ['Inventory', data[0][2]],
-                    ['Total Current Assets', data[0][0] + data[0][1] + data[0][2]],
-                    ['Buildings', data[0][3]],
-                    ['Equipment', data[0][4]],
-                    ['Total Fixed Assets', data[0][3] + data[0][4]],
-                    ['Total Assets', data[0][0] + data[0][1] + data[0][2] + data[0][3] + data[0][4]]]
+            data1 = [['Cash', bs_data[0][0]],
+                    ['Account Receivable', bs_data[0][1]],
+                    ['Inventory', bs_data[0][2]],
+                    ['Total Current Assets', bs_data[0][0] + bs_data[0][1] + bs_data[0][2]],
+                    ['Buildings', bs_data[0][3]],
+                    ['Equipment', bs_data[0][4]],
+                    ['Total Fixed Assets', bs_data[0][3] + bs_data[0][4]],
+                    ['Total Assets', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4]]]
             d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
-            data2 = [['Accounts Payable', data[0][5]],
-                    ['Notes Payable', data[0][6]],
-                    ['Accurals', data[0][7]],
-                    ['Total Current Liabilities', data[0][5] + data[0][6] + data[0][7]],
-                    ['Mortgage', data[0][8]],
-                    ['Total Long Term Debt', data[0][8]],
+            data2 = [['Accounts Payable', bs_data[0][5]],
+                    ['Notes Payable', bs_data[0][6]],
+                    ['Accurals', bs_data[0][7]],
+                    ['Total Current Liabilities', bs_data[0][5] + bs_data[0][6] + bs_data[0][7]],
+                    ['Mortgage', bs_data[0][8]],
+                    ['Total Long Term Debt', bs_data[0][8]],
                     #['Total Liabilities', total_liabilities],
-                    ['Net Worth', data[0][0] + data[0][1] + data[0][2] + data[0][3] + data[0][4] - (data[0][5] + data[0][6] + data[0][7] + data[0][8])],
-                    ['Total', data[0][0] + data[0][1] + data[0][2] + data[0][3] + data[0][4] ]]
+                    ['Net Worth', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4] - (bs_data[0][5] + bs_data[0][6] + bs_data[0][7] + bs_data[0][8])],
+                    ['Total', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4] ]]
             d2 = pd.DataFrame(data2, columns = ['Liabilities & Net Worth', 'Values'])
             result = pd.concat([d1, d2], axis=1).reindex(d2.index).style.set_precision(2)
             st.write(result)
@@ -448,7 +471,7 @@ def main():
         # data = get_the_last_bs_of_that_day("2022-02-26")
         #st.write(data)
 
-        st.write("View latest Income Statement")
+        st.write("View **latest** Income Statement")
         gross_profit = data[0][0] - data[0][1]
         total_expenses = data[0][2] + data[0][3] + data[0][4] + data[0][5]
         ebt = gross_profit - total_expenses
@@ -468,20 +491,27 @@ def main():
 
     elif choice == "View Payroll History":
         st.subheader("View Payroll History")
+
+        # TODO: """change col name of disbursement to AMOUNT PAID"""
         # View Payroll History
         query = conn.execute("SELECT date(date), employee, salary, disbursement, withholding, federal_tax, social_security_tax, medicare, total_disbursement, total_withholding FROM payrollHistoryTable")
-        cols = [column[0] for column in query.description]
+        # cols = [column[0] for column in query.description]
+        cols = ["Date", "Employee", "Salary", "Amount paid", "Withholding", "Federal Tax", "Social Security Tax", "Medicare", "Total Amount Paid", "Total Withholding"]
         results = pd.DataFrame.from_records(data = query.fetchall(), columns = cols).style.set_precision(2)
         st.dataframe(results)
 
-        # Display Total Disbursement and Total Withholding
+        # Additionally Display Total Disbursement (Total Amount Paid) and Total Withholding
         named_tuple = time.localtime()
         time_string = time.strftime("%Y-%m-%d %H:%M:%S", named_tuple)
         date_string = time.strftime("%Y-%m-%d", named_tuple)
         data = get_payroll_history_nearest(time_string)
         data1 = [[data[0][8], data[0][9]]]
-        d1 = pd.DataFrame(data1, columns = ['Total Disbursement', 'Total Withholding']).style.set_precision(2)
+        d1 = pd.DataFrame(data1, columns = ['Total Amount Paid', 'Total Withholding']).style.set_precision(2)
         st.dataframe(d1)
 
+    elif choice == "View Inventory":
+        st.subheader("View Inventory")
+        result = view_all_inventory()
+        st.dataframe(result)
 if __name__ == '__main__':
     main()
