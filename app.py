@@ -122,6 +122,7 @@ def init_db(conn: Connection):
     #                 'No')""")
 
     # Stock Units
+    #conn.execute('DROP TABLE stockTable')
     conn.execute('CREATE TABLE IF NOT EXISTS stockTable(stock_units REAL)')
     # conn.execute("""INSERT INTO stockTable
     #                 VALUES (
@@ -575,7 +576,7 @@ def main():
         # Third Table in View Inventory
         c.execute('SELECT stock_units FROM stockTable LIMIT 1')
         stock_units = c.fetchall()
-        
+
         total_val = stock_units[0][0] * price_per_unit_sum
         d2 = pd.DataFrame([[stock_units[0][0], total_val]], columns = ['Complete Units in Stock', 'Total Value']).style.set_precision(2)
         st.dataframe(d2)
