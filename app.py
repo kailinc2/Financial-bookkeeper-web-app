@@ -20,7 +20,8 @@ def init_db(conn: Connection):
     conn.execute('CREATE TABLE IF NOT EXISTS vendorTable(company TEXT, part TEXT, price TEXT, firstname TEXT, lastname TEXT, address1 TEXT, address2 TEXT, city TEXT, state TEXT, zipcode TEXT)')
     # BS
     #conn.execute('DROP TABLE bsTable')
-    # c.execute("UPDATE bsTable SET inventory = 5040")
+    #c.execute("UPDATE bsTable SET equipment = 10000")
+    #conn.execute("""DELETE FROM bsTable WHERE cash = 885264.5;""")
     conn.execute('CREATE TABLE IF NOT EXISTS bsTable(cash REAL, receivable REAL, inventory REAL, building REAL, equipment REAL, payable REAL, notes_payable REAL, accurals REAL, mortgage REAL, date REAL)')
     # conn.execute("""INSERT INTO bsTable(cash, receivable, inventory, building, equipment, payable, notes_payable, accurals, mortgage, date)
     #                 VALUES (
@@ -64,9 +65,7 @@ def init_db(conn: Connection):
     #                 35175,
     #                 14825
     #                 )""")
-    # conn.execute("""DELETE FROM payrollHistoryTable WHERE employee = 'Colin';""")
-    #Delete data
-    # conn.execute("""DELETE FROM employeeTable WHERE firstname = 'Kai-Lin';""")
+
 
     # Inventory
     #conn.execute('DROP TABLE inventoryTable')
@@ -197,6 +196,11 @@ def get_bs_nearest(nearest_time):
     c.execute("SELECT * FROM bsTable ORDER BY abs(julianday(?) - date) LIMIT 1 ", (nearest_time,))
     data = c.fetchall()
     return data
+def get_bs_net30(current_date):
+    c.execute("SELECT *, date(date) FROM bsTable ORDER BY abs(julianday(?, '+1 month') - date) LIMIT 1 ", (current_date,))
+    data = c.fetchall()
+    return data
+
 def get_the_last_bs_of_that_day(date_string):
     c.execute("SELECT * FROM bsTable WHERE date(date) = date(julianday(?)) ORDER BY abs(julianday(?) - date) DESC LIMIT 1 ", (date_string, date_string))
     data = c.fetchall()
@@ -256,32 +260,11 @@ def view_all_inventory():
 def main():
     st.title("TE566 Final Project")
     init_db(conn)
-    # Approach 3: merge two dataframe
-    # initialize balanced sheet
-    # cash = 195397.5
-    # receivable = 0
-    # inventory = 26122.5
-    # total_current_assets = cash + receivable + inventory
-    # building = 0
-    # equipment = 0
-    # total_fixed_assets = building + equipment
-    # total_assets = total_current_assets + total_fixed_assets
-    #
-    # payable = 0
-    # notes_payable = 0
-    # accurals = 0
-    # total_current_liabilities = payable + notes_payable + accurals
-    # mortgage = 200000
-    # total_longterm_debt = mortgage
-    # #total_liabilities = total_current_liabilities + total_longterm_debt
-    # net_worth = total_assets - total_current_liabilities - total_longterm_debt
-    # total = net_worth + total_current_liabilities + total_longterm_debt
-
-    menu = ["View Employees", "Add Employees",
+    menu = ["View Balanced Sheet", "View Income Statement",
+            "View Employees", "Add Employees",
             "View Customer", "Add Customer",
             "View Vendor", "Add Vendor",
             "Pay Employee", "View Payroll History",
-            "View Balanced Sheet", "View Income Statement",
             "View Inventory", "Create Invoice", "View Invoice History",
             "Create PO", "View PO History"]
     choice = st.sidebar.selectbox("Menu", menu)
@@ -460,14 +443,6 @@ def main():
     elif choice == "View Balanced Sheet":
         st.subheader("View Balanced Sheet")
 
-        st.write("View all BS records")
-        # view all BS
-        query = conn.execute("SELECT cash, receivable, inventory, building, equipment, payable, notes_payable, accurals, mortgage, date(date), time(date), date FROM bsTable")
-        cols = [column[0] for column in query.description]
-        results = pd.DataFrame.from_records(data = query.fetchall(), columns = ["Cash", "Receivable", "Inventory", "Building", "equipment", "payable", "notes_payable", "accurals", "mortgage", "date", "time", "julian"])
-        st.dataframe(results)
-        # st.dataframe(results.style.set_precision(2))
-
         # get time right now
         named_tuple = time.localtime()
         time_string = time.strftime("%Y-%m-%d %H:%M:%S", named_tuple)
@@ -477,7 +452,7 @@ def main():
         # data = get_the_last_bs_of_that_day("2022-02-26")
         #st.write(data)
 
-        st.write("View **latest** Balanced Sheet")
+        st.write("Current Date: **{}**".format(date_string))
         data1 = [['Cash', data[0][0]],
                 ['Account Receivable', data[0][1]],
                 ['Inventory', data[0][2]],
@@ -500,45 +475,63 @@ def main():
         result = pd.concat([d1, d2], axis=1).reindex(d2.index).style.set_precision(2)
         st.write(result)
 
+        if st.button("Net30: advance one month"):
+            # Net30: Current date + 1 month
 
-        # Approach 2
-        # # initialize list of lists
-        # data = [['Cash', 195397.5, 'Accounts Payable', 0],
-        #         ['Account Receivable', 0, 'Notes Payable', 0],
-        #         ['Inventory', 26122.5, 'Accurals', 0]]
-        # # Create the pandas DataFrame
-        # df = pd.DataFrame(data, columns = ['Current Asset', 'Value', 'Liabilities & Net Worth', 'Values'])
-        # # print dataframe.
-        # st.write(df)
+            data = get_bs_nearest(time_string)
+            cash = data[0][0]
+            receivable = data[0][1]
+            inventory = data[0][2]
+            building = data[0][3]
+            equipment = data[0][4]
+            payable = data[0][5]
+            notes_payable = data[0][6]
+            accurals = data[0][7]
+            mortgage = data[0][8]
+            date = date_string # Current date
 
+            cash = cash + receivable - payable
+            receivable, payable = 0, 0
+            conn.execute('INSERT INTO bsTable(cash, receivable, inventory, building, equipment, payable, notes_payable, accurals, mortgage, date) VALUES (?,?,?,?,?,?,?,?,?,julianday(?, "+1 months"))', (cash, receivable, inventory, building, equipment, payable, notes_payable, accurals, mortgage, date))
+            conn.commit()
 
-        # Approach 1
-        # col1, col2 = st.columns(2)
-        # with col1:
-        #     col1.subheader("Current Asset")
-        #     # initialize list of lists
-        #     data = [['Cash', 195397.5], ['Account Receivable', 0], ['Inventory', 26122.5]]
-        #     # Create the pandas DataFrame
-        #     df = pd.DataFrame(data, columns = ['Current Asset', 'Value'])
-        #     # print dataframe.
-        #     st.write(df)
-        # with col2:
-        #     col2.subheader("Liabilities and Net Worth")
-        #     # initialize list of lists
-        #     data = [['Cash', 195397.5], ['Account Receivable', 0], ['Inventory', 26122.5]]
-        #     # Create the pandas DataFrame
-        #     df = pd.DataFrame(data, columns = ['Current Asset', 'Value'])
-        #     # print dataframe.
-        #     st.write(df)
+            data = get_bs_net30(date)
+            # data = get_the_last_bs_of_that_day("2022-02-26")
+
+            # Display Net30 BS
+            net30_date = data[0][-1]
+            st.write("View Balanced Sheet: Current Date: {}".format(net30_date))
+            data1 = [['Cash', data[0][0]],
+                    ['Account Receivable', data[0][1]],
+                    ['Inventory', data[0][2]],
+                    ['Total Current Assets', data[0][0] + data[0][1] + data[0][2]],
+                    ['Buildings', data[0][3]],
+                    ['Equipment', data[0][4]],
+                    ['Total Fixed Assets', data[0][3] + data[0][4]],
+                    ['Total Assets', data[0][0] + data[0][1] + data[0][2] + data[0][3] + data[0][4]]]
+            d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
+            data2 = [['Accounts Payable', data[0][5]],
+                    ['Notes Payable', data[0][6]],
+                    ['Accurals', data[0][7]],
+                    ['Total Current Liabilities', data[0][5] + data[0][6] + data[0][7]],
+                    ['Mortgage', data[0][8]],
+                    ['Total Long Term Debt', data[0][8]],
+                    ['Net Worth', data[0][0] + data[0][1] + data[0][2] + data[0][3] + data[0][4] - (data[0][5] + data[0][6] + data[0][7] + data[0][8])],
+                    ['Total', data[0][0] + data[0][1] + data[0][2] + data[0][3] + data[0][4] ]]
+            d2 = pd.DataFrame(data2, columns = ['Liabilities & Net Worth', 'Values'])
+            result = pd.concat([d1, d2], axis=1).reindex(d2.index).style.set_precision(2)
+            st.write(result)
+        if st.button("View all Balanced Sheet Records"):
+            #st.write("View all BS records")
+            # view all BS
+            query = conn.execute("SELECT cash, receivable, inventory, building, equipment, payable, notes_payable, accurals, mortgage, date(date), time(date) FROM bsTable")
+            cols = [column[0] for column in query.description]
+            results = pd.DataFrame.from_records(data = query.fetchall(), columns = ["Cash", "Receivable", "Inventory", "Building", "equipment", "payable", "notes_payable", "accurals", "mortgage", "date", "time"])
+            st.dataframe(results)
+
     elif choice == "View Income Statement":
         st.subheader("View Income Statement")
 
-        st.write("View all Income Statement records")
-        # view all Income Statement
-        query = conn.execute("SELECT sales_revenue, cogs, payroll, payroll_withholding, medicare, annual_expenses, date(date), time(date), date FROM plTable")
-        cols = [column[0] for column in query.description]
-        results = pd.DataFrame.from_records(data = query.fetchall(), columns = cols)
-        st.dataframe(results)
 
         # get time right now
         named_tuple = time.localtime()
@@ -549,7 +542,7 @@ def main():
         # data = get_the_last_bs_of_that_day("2022-02-26")
         #st.write(data)
 
-        st.write("View **latest** Income Statement")
+        st.write("Current Date: **{}**".format(date_string))
         gross_profit = data[0][0] - data[0][1]
         total_expenses = data[0][2] + data[0][3] + data[0][4] + data[0][5]
         ebt = gross_profit - total_expenses
@@ -566,6 +559,14 @@ def main():
                 ['Net Income', ebt - 0.20*ebt]]
         d1 = pd.DataFrame(data1, columns = ['Income Statement', 'Value']).style.set_precision(2)
         st.dataframe(d1, height = 900)
+
+        if st.button("View all Income Statement records"):
+            #st.write("View all Income Statement records")
+            # view all Income Statement
+            query = conn.execute("SELECT sales_revenue, cogs, payroll, payroll_withholding, medicare, annual_expenses, date(date), time(date) FROM plTable")
+            cols = [column[0] for column in query.description]
+            results = pd.DataFrame.from_records(data = query.fetchall(), columns = cols)
+            st.dataframe(results)
 
     elif choice == "View Payroll History":
         st.subheader("View Payroll History")
@@ -749,6 +750,7 @@ def main():
         cols = ["Date", "Customer", "Quantity", "Price/Part", "Total"]
         results = pd.DataFrame.from_records(data = query.fetchall(), columns = cols).style.set_precision(2)
         st.dataframe(results)
+
     elif choice == "Create PO": # Make a Purchase from vendor
         st.subheader("Create PO")
 
@@ -782,7 +784,7 @@ def main():
             part = selected_part
 
             purchase_price = purchase_num * price
-            st.success("Purchase total of {} {} successfully. Total: {} x {} = {}.".format(purchase_num, part, purchase_num, price, purchase_price))
+            st.success("Purchase total of {} {} successfully. Total: {} x ${} = {}.".format(purchase_num, part, purchase_num, price, purchase_price))
 
             # Update Inventory Table
             c.execute('SELECT Quantity, price_per_unit FROM inventoryTable WHERE Part = ?', (part,))
@@ -883,5 +885,6 @@ def main():
         cols = ["Date", "scupplier", "Part", "Quantity", "Price/Part", "Total"]
         results = pd.DataFrame.from_records(data = query.fetchall(), columns = cols).style.set_precision(2)
         st.dataframe(results)
+
 if __name__ == '__main__':
     main()
