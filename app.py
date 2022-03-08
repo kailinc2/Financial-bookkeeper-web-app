@@ -20,6 +20,7 @@ def init_db(conn: Connection):
     conn.execute('CREATE TABLE IF NOT EXISTS vendorTable(company TEXT, part TEXT, price TEXT, firstname TEXT, lastname TEXT, address1 TEXT, address2 TEXT, city TEXT, state TEXT, zipcode TEXT)')
     # BS
     #conn.execute('DROP TABLE bsTable')
+    # c.execute("UPDATE bsTable SET inventory = 5040")
     conn.execute('CREATE TABLE IF NOT EXISTS bsTable(cash REAL, receivable REAL, inventory REAL, building REAL, equipment REAL, payable REAL, notes_payable REAL, accurals REAL, mortgage REAL, date REAL)')
     # conn.execute("""INSERT INTO bsTable(cash, receivable, inventory, building, equipment, payable, notes_payable, accurals, mortgage, date)
     #                 VALUES (
@@ -138,6 +139,16 @@ def init_db(conn: Connection):
     #                 2.5,
     #                 12.5
     #                 )""")
+    #conn.execute('DROP TABLE poHistoryTable')
+    conn.execute('CREATE TABLE IF NOT EXISTS poHistoryTable(date REAL, supplier TEXT, part TEXT, quantity REAL, price_per_unit REAL, total REAL)')
+    # conn.execute("""INSERT INTO poHistoryTable VALUES(
+    #                 julianday('now', 'localtime'),
+    #                 'Best Bread',
+    #                 'Bread',
+    #                 10,
+    #                 1.0,
+    #                 10.0
+    #                 )""")
     conn.commit()
 
 def add_employee(firstname, lastname, address1, address2, city, state, zipcode, ssn, withholding, salary):
@@ -229,6 +240,10 @@ def add_invoice_history(date, customer, quantity, price_per_unit, total):
     conn.execute('INSERT INTO invoiceHistoryTable VALUES(julianday(?),?,?,?,?)', (date, customer, quantity, price_per_unit, total))
     conn.commit()
 
+def add_PO_history(date, supplier, part, quantity, price_per_unit, total):
+    conn.execute('INSERT INTO poHistoryTable VALUES(julianday(?),?,?,?,?,?)', (date, supplier, part, quantity, price_per_unit, total))
+    conn.commit()
+
 def view_all_inventory():
     query = conn.execute("SELECT * FROM inventoryTable")
     cols = [column[0] for column in query.description]
@@ -267,7 +282,8 @@ def main():
             "View Vendor", "Add Vendor",
             "Pay Employee", "View Payroll History",
             "View Balanced Sheet", "View Income Statement",
-            "View Inventory", "Create Invoice", "View Invoice History"]
+            "View Inventory", "Create Invoice", "View Invoice History",
+            "Create PO", "View PO History"]
     choice = st.sidebar.selectbox("Menu", menu)
 
     if choice == "View Employees":
@@ -514,7 +530,6 @@ def main():
         #     df = pd.DataFrame(data, columns = ['Current Asset', 'Value'])
         #     # print dataframe.
         #     st.write(df)
-
     elif choice == "View Income Statement":
         st.subheader("View Income Statement")
 
@@ -635,8 +650,8 @@ def main():
             cus_company = cus_info[0][1]
             invoice_cogs = purchase_num * price_per_unit_sum
             invoice_price = purchase_num * price
-            st.success("Invoice sent successfully. Total invoice amount: {}.".format(invoice_price))
-            
+            st.success("Invoice sent successfully. Total invoice amount: {} x {} = {}.".format(purchase_num, price, invoice_price))
+
             # Update Stock Table
             c.execute('SELECT stock_units FROM stockTable LIMIT 1')
             stock_units = c.fetchall()
@@ -729,11 +744,144 @@ def main():
     elif choice == "View Invoice History":
         st.subheader("View Invoice History")
         # View Invoice History
-        query = conn.execute("SELECT date(date), Customer, Quantity, price_per_unit, Total FROM invoiceHistoryTable")
+        query = conn.execute("SELECT date(date), customer, quantity, price_per_unit, total FROM invoiceHistoryTable")
         #cols = [column[0] for column in query.description]
         cols = ["Date", "Customer", "Quantity", "Price/Part", "Total"]
         results = pd.DataFrame.from_records(data = query.fetchall(), columns = cols).style.set_precision(2)
         st.dataframe(results)
+    elif choice == "Create PO": # Make a Purchase from vendor
+        st.subheader("Create PO")
 
+        # Display all vendors
+        st.write("View all vendors to choose inventory")
+        result = view_all_vendor()
+        st.dataframe(result)
+
+        # Select a vendor to purchase
+        c.execute('SELECT DISTINCT part FROM vendorTable')
+        ven_data = c.fetchall()
+        vendor_company_name = [str(i[0]) for i in ven_data]
+        selected_part = st.selectbox("Please select a part to purchase", vendor_company_name)
+
+        purchase_num = st.text_input("Number of Unit to Purchase")
+
+        c.execute("SELECT company FROM vendorTable WHERE part = ?", (selected_part,))
+        ven_data = c.fetchall()
+        ven_company = ven_data[0][0]
+
+        if st.button("Purchase inventory"):
+            purchase_num = float(purchase_num)
+
+            # Get price of the selected Vendor
+            c.execute("SELECT price, company, part FROM vendorTable WHERE company = ?", (ven_company,))
+            ven_data = c.fetchall()
+            ven_info = ven_data
+
+            price = float(ven_info[0][0])
+            ven_company = ven_info[0][1]
+            part = selected_part
+
+            purchase_price = purchase_num * price
+            st.success("Purchase total of {} {} successfully. Total: {} x {} = {}.".format(purchase_num, part, purchase_num, price, purchase_price))
+
+            # Update Inventory Table
+            c.execute('SELECT Quantity, price_per_unit FROM inventoryTable WHERE Part = ?', (part,))
+            stock_units = c.fetchall()
+            price_per_unit = stock_units[0][1]
+            remain_stock_units = stock_units[0][0] + purchase_num
+            c.execute("UPDATE inventoryTable SET Quantity = ? WHERE Part = ?", (remain_stock_units, part))
+            c.execute("UPDATE inventoryTable SET Value = ? WHERE Part = ?", (remain_stock_units * price_per_unit, part))
+            conn.commit()
+
+            # Start updating BS and PL
+            # get time right now
+            localtime = time.localtime()
+            time_string_PO = time.strftime("%Y-%m-%d %H:%M:%S", localtime)
+            # get BS data before purchase
+            bs_data = get_bs_nearest(time_string_PO)
+            # add BS data after purchase
+            add_bs(
+                   bs_data[0][0], # cash
+                   bs_data[0][1], # receivable
+                   bs_data[0][2] + purchase_price, # inventory + purchase_price
+                   bs_data[0][3], # building
+                   bs_data[0][4], # equipment
+                   bs_data[0][5] + purchase_price, # payable + purchase_price
+                   bs_data[0][6], # notes_payable
+                   bs_data[0][7], # accurals
+                   bs_data[0][8], # mortgage
+                   time_string_PO # date
+                   )
+            pl_data = get_pl_nearest(time_string_PO)
+            # add PL pl_data after purchase
+            add_pl(
+                   pl_data[0][0], # sales_revenue
+                   pl_data[0][1], # cogs
+                   pl_data[0][2], # payroll
+                   pl_data[0][3], # payroll_withholding
+                   pl_data[0][4], # medicare
+                   pl_data[0][5], # annual_expenses
+                   time_string_PO # date
+                   )
+            # Add PO History
+            # invoice_history_data = get_invoice_history_nearest(time_string_PO)
+            add_PO_history(time_string_PO, ven_company, part, purchase_num, price, purchase_price)
+
+            # Show UPDATED BS
+            after_localtime = time.localtime()
+            after_time_string_invoice = time.strftime("%Y-%m-%d %H:%M:%S", after_localtime)
+            bs_data = get_bs_nearest(after_time_string_invoice)
+            st.write("Balanced sheet updated:")
+            data1 = [['Cash', bs_data[0][0]],
+                    ['Account Receivable', bs_data[0][1]],
+                    ['Inventory', bs_data[0][2]],
+                    ['Total Current Assets', bs_data[0][0] + bs_data[0][1] + bs_data[0][2]],
+                    ['Buildings', bs_data[0][3]],
+                    ['Equipment', bs_data[0][4]],
+                    ['Total Fixed Assets', bs_data[0][3] + bs_data[0][4]],
+                    ['Total Assets', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4]]]
+            d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
+            data2 = [['Accounts Payable', bs_data[0][5]],
+                    ['Notes Payable', bs_data[0][6]],
+                    ['Accurals', bs_data[0][7]],
+                    ['Total Current Liabilities', bs_data[0][5] + bs_data[0][6] + bs_data[0][7]],
+                    ['Mortgage', bs_data[0][8]],
+                    ['Total Long Term Debt', bs_data[0][8]],
+                    #['Total Liabilities', total_liabilities],
+                    ['Net Worth', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4] - (bs_data[0][5] + bs_data[0][6] + bs_data[0][7] + bs_data[0][8])],
+                    ['Total', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4] ]]
+            d2 = pd.DataFrame(data2, columns = ['Liabilities & Net Worth', 'Values'])
+            result = pd.concat([d1, d2], axis=1).reindex(d2.index).style.set_precision(2)
+            st.write(result)
+
+            # Show UPDATED PL
+            # after_localtime = time.localtime()
+            # after_time_string_invoice = time.strftime("%Y-%m-%d %H:%M:%S", after_localtime)
+            data = get_pl_nearest(after_time_string_invoice)
+            st.write("Income Statement updated:")
+            gross_profit = data[0][0] - data[0][1]
+            total_expenses = data[0][2] + data[0][3] + data[0][4] + data[0][5]
+            ebt = gross_profit - total_expenses
+            data1 = [['Sales Revenue', data[0][0]],
+                    ['COGS', data[0][1]],
+                    ['Gross Profit', gross_profit],
+                    ['Payroll', data[0][2]],
+                    ['Payroll Withholding', data[0][3]],
+                    ['Medicare', data[0][4]],
+                    ['Annual Expenses', data[0][5]],
+                    ['Total Expenses', total_expenses],
+                    ['Earnings Before Taxes', ebt],
+                    ['Taxes', 0.20 * ebt],
+                    ['Net Income', ebt - 0.20*ebt]]
+            d1 = pd.DataFrame(data1, columns = ['Income Statement', 'Value']).style.set_precision(2)
+            st.dataframe(d1, height = 900)
+    elif choice == "View PO History":
+        st.subheader("View PO History")
+        # View PO History
+        query = conn.execute("SELECT date(date), supplier, part, quantity, price_per_unit, total FROM poHistoryTable")
+        #cols = [column[0] for column in query.description]
+        cols = ["Date", "scupplier", "Part", "Quantity", "Price/Part", "Total"]
+        results = pd.DataFrame.from_records(data = query.fetchall(), columns = cols).style.set_precision(2)
+        st.dataframe(results)
 if __name__ == '__main__':
     main()
