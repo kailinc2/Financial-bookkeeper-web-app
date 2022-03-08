@@ -77,7 +77,7 @@ def init_db(conn: Connection):
     #                 330000,
     #                 3300,
     #                 'No')""")
-
+    #
     # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
     #                 VALUES (
     #                 'Screw',
@@ -85,7 +85,47 @@ def init_db(conn: Connection):
     #                 48250,
     #                 965,
     #                 'No')""")
+    # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
+    #                 VALUES (
+    #                 'Meat',
+    #                 3.5,
+    #                 1000,
+    #                 3500,
+    #                 'No')""")
+    # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
+    #                 VALUES (
+    #                 'Cheese',
+    #                 0.4,
+    #                 1000,
+    #                 400,
+    #                 'No')""")
+    # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
+    #                 VALUES (
+    #                 'Olive oil',
+    #                 0.1,
+    #                 1000,
+    #                 100,
+    #                 'No')""")
+    # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
+    #                 VALUES (
+    #                 'Mayonnaise',
+    #                 0.5,
+    #                 1000,
+    #                 500,
+    #                 'No')""")
+    # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
+    #                 VALUES (
+    #                 'Bread',
+    #                 1.0,
+    #                 500,
+    #                 1000,
+    #                 'No')""")
 
+    # Stock Units
+    conn.execute('CREATE TABLE IF NOT EXISTS stockTable(stock_units REAL)')
+    # conn.execute("""INSERT INTO stockTable
+    #                 VALUES (
+    #                 100)""")
     conn.commit()
 
 def add_employee(firstname, lastname, address1, address2, city, state, zipcode, ssn, withholding, salary):
@@ -518,15 +558,27 @@ def main():
         result = view_all_inventory()
         st.dataframe(result.style.set_precision(2))
 
-        c.execute('SELECT price_per_unit, Value FROM inventoryTable')
+        # Second Table in View Inventory
+        c.execute('SELECT price_per_unit, Quantity, Value FROM inventoryTable')
         data = c.fetchall()
         price_per_unit_sum = 0
         total_value_sum = 0
+        quantity = 1e9
         for i in data:
             price_per_unit_sum += i[0]
-            total_value_sum += i[1]
-        d1 = pd.DataFrame([[price_per_unit_sum, total_value_sum]], columns = ['COG/Unit', 'Total Value of Inventory']).style.set_precision(2)
+            total_value_sum += i[2]
+            quantity = min(quantity, i[1])
+
+        d1 = pd.DataFrame([[total_value_sum, price_per_unit_sum, quantity]], columns = ['Total Value', 'COG/Unit', 'Total Units that can be built from current parts']).style.set_precision(2)
         st.dataframe(d1)
+
+        # Third Table in View Inventory
+        c.execute('SELECT stock_units FROM stockTable LIMIT 1')
+        stock_units = c.fetchall()
+        
+        total_val = stock_units[0][0] * price_per_unit_sum
+        d2 = pd.DataFrame([[stock_units[0][0], total_val]], columns = ['Complete Units in Stock', 'Total Value']).style.set_precision(2)
+        st.dataframe(d2)
 
 if __name__ == '__main__':
     main()
