@@ -127,7 +127,7 @@ def init_db(conn: Connection):
     # conn.execute("""INSERT INTO stockTable
     #                 VALUES (
     #                 100)""")
-    # c.execute("UPDATE stockTable SET stock_units = ?", (90,))
+    #c.execute("UPDATE stockTable SET stock_units = ?", (500,))
     # Invoice History
     #conn.execute('DROP TABLE invoiceHistoryTable')
     conn.execute('CREATE TABLE IF NOT EXISTS invoiceHistoryTable(date REAL, customer TEXT, quantity REAL, price_per_unit REAL, total REAL)')
@@ -666,6 +666,31 @@ def main():
             time_string_invoice = time.strftime("%Y-%m-%d %H:%M:%S", localtime)
             # get BS data before invoice
             bs_data = get_bs_nearest(time_string_invoice)
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.write("Balanced Sheet before invoice:")
+                # Show current BS
+                data1 = [['Cash', bs_data[0][0]],
+                        ['Account Receivable', bs_data[0][1]],
+                        ['Inventory', bs_data[0][2]],
+                        ['Total Current Assets', bs_data[0][0] + bs_data[0][1] + bs_data[0][2]],
+                        ['Buildings', bs_data[0][3]],
+                        ['Equipment', bs_data[0][4]],
+                        ['Total Fixed Assets', bs_data[0][3] + bs_data[0][4]],
+                        ['Total Assets', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4]]]
+                d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
+                data2 = [['Accounts Payable', bs_data[0][5]],
+                        ['Notes Payable', bs_data[0][6]],
+                        ['Accurals', bs_data[0][7]],
+                        ['Total Current Liabilities', bs_data[0][5] + bs_data[0][6] + bs_data[0][7]],
+                        ['Mortgage', bs_data[0][8]],
+                        ['Total Long Term Debt', bs_data[0][8]],
+                        ['Net Worth', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4] - (bs_data[0][5] + bs_data[0][6] + bs_data[0][7] + bs_data[0][8])],
+                        ['Total', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4] ]]
+                d2 = pd.DataFrame(data2, columns = ['Liabilities & Net Worth', 'Values'])
+                before_bs_result = pd.concat([d1, d2], axis=1).reindex(d2.index).style.set_precision(2)
+                st.write(before_bs_result)
+
             # add BS data after invoice
             add_bs(
                    bs_data[0][0], # cash
@@ -679,7 +704,27 @@ def main():
                    bs_data[0][8], # mortgage
                    time_string_invoice # date
                    )
+            # get PL data before invoice
             pl_data = get_pl_nearest(time_string_invoice)
+            with col2:
+                st.write("Income Statement before invoice:")
+                gross_profit = pl_data[0][0] - pl_data[0][1]
+                total_expenses = pl_data[0][2] + pl_data[0][3] + pl_data[0][4] + pl_data[0][5]
+                ebt = gross_profit - total_expenses
+                data1 = [['Sales Revenue', pl_data[0][0]],
+                        ['COGS', pl_data[0][1]],
+                        ['Gross Profit', gross_profit],
+                        ['Payroll', pl_data[0][2]],
+                        ['Payroll Withholding', pl_data[0][3]],
+                        ['Medicare', pl_data[0][4]],
+                        ['Annual Expenses', pl_data[0][5]],
+                        ['Total Expenses', total_expenses],
+                        ['Earnings Before Taxes', ebt],
+                        ['Taxes', 0.20 * ebt],
+                        ['Net Income', ebt - 0.20*ebt]]
+                d1 = pd.DataFrame(data1, columns = ['Income Statement', 'Value']).style.set_precision(2)
+                st.dataframe(d1, height = 900)
+
             # add PL pl_data after payment
             add_pl(
                    pl_data[0][0] + invoice_price, # sales_revenue
@@ -698,50 +743,51 @@ def main():
             after_localtime = time.localtime()
             after_time_string_invoice = time.strftime("%Y-%m-%d %H:%M:%S", after_localtime)
             bs_data = get_bs_nearest(after_time_string_invoice)
-            st.write("Balanced sheet updated:")
-            data1 = [['Cash', bs_data[0][0]],
-                    ['Account Receivable', bs_data[0][1]],
-                    ['Inventory', bs_data[0][2]],
-                    ['Total Current Assets', bs_data[0][0] + bs_data[0][1] + bs_data[0][2]],
-                    ['Buildings', bs_data[0][3]],
-                    ['Equipment', bs_data[0][4]],
-                    ['Total Fixed Assets', bs_data[0][3] + bs_data[0][4]],
-                    ['Total Assets', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4]]]
-            d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
-            data2 = [['Accounts Payable', bs_data[0][5]],
-                    ['Notes Payable', bs_data[0][6]],
-                    ['Accurals', bs_data[0][7]],
-                    ['Total Current Liabilities', bs_data[0][5] + bs_data[0][6] + bs_data[0][7]],
-                    ['Mortgage', bs_data[0][8]],
-                    ['Total Long Term Debt', bs_data[0][8]],
-                    #['Total Liabilities', total_liabilities],
-                    ['Net Worth', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4] - (bs_data[0][5] + bs_data[0][6] + bs_data[0][7] + bs_data[0][8])],
-                    ['Total', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4] ]]
-            d2 = pd.DataFrame(data2, columns = ['Liabilities & Net Worth', 'Values'])
-            result = pd.concat([d1, d2], axis=1).reindex(d2.index).style.set_precision(2)
-            st.write(result)
+
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                st.write("Balanced Sheet after invoice:")
+                data1 = [['Cash', bs_data[0][0]],
+                        ['Account Receivable', bs_data[0][1]],
+                        ['Inventory', bs_data[0][2]],
+                        ['Total Current Assets', bs_data[0][0] + bs_data[0][1] + bs_data[0][2]],
+                        ['Buildings', bs_data[0][3]],
+                        ['Equipment', bs_data[0][4]],
+                        ['Total Fixed Assets', bs_data[0][3] + bs_data[0][4]],
+                        ['Total Assets', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4]]]
+                d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
+                data2 = [['Accounts Payable', bs_data[0][5]],
+                        ['Notes Payable', bs_data[0][6]],
+                        ['Accurals', bs_data[0][7]],
+                        ['Total Current Liabilities', bs_data[0][5] + bs_data[0][6] + bs_data[0][7]],
+                        ['Mortgage', bs_data[0][8]],
+                        ['Total Long Term Debt', bs_data[0][8]],
+                        ['Net Worth', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4] - (bs_data[0][5] + bs_data[0][6] + bs_data[0][7] + bs_data[0][8])],
+                        ['Total', bs_data[0][0] + bs_data[0][1] + bs_data[0][2] + bs_data[0][3] + bs_data[0][4] ]]
+                d2 = pd.DataFrame(data2, columns = ['Liabilities & Net Worth', 'Values'])
+                after_bs_result = pd.concat([d1, d2], axis=1).reindex(d2.index).style.set_precision(2)
+                st.write(after_bs_result)
 
             # Show UPDATED PL
-            # after_localtime = time.localtime()
-            # after_time_string_invoice = time.strftime("%Y-%m-%d %H:%M:%S", after_localtime)
-            data = get_pl_nearest(after_time_string_invoice)
-            st.write("Income Statement updated:")
-            gross_profit = data[0][0] - data[0][1]
-            total_expenses = data[0][2] + data[0][3] + data[0][4] + data[0][5]
-            ebt = gross_profit - total_expenses
-            data1 = [['Sales Revenue', data[0][0]],
-                    ['COGS', data[0][1]],
-                    ['Gross Profit', gross_profit],
-                    ['Payroll', data[0][2]],
-                    ['Payroll Withholding', data[0][3]],
-                    ['Medicare', data[0][4]],
-                    ['Annual Expenses', data[0][5]],
-                    ['Total Expenses', total_expenses],
-                    ['Earnings Before Taxes', ebt],
-                    ['Taxes', 0.20 * ebt],
-                    ['Net Income', ebt - 0.20*ebt]]
-            d1 = pd.DataFrame(data1, columns = ['Income Statement', 'Value']).style.set_precision(2)
-            st.dataframe(d1, height = 900)
+            with col2:
+                pl_data = get_pl_nearest(after_time_string_invoice)
+                st.write("Income Statement after invoice:")
+                gross_profit = pl_data[0][0] - pl_data[0][1]
+                total_expenses = pl_data[0][2] + pl_data[0][3] + pl_data[0][4] + pl_data[0][5]
+                ebt = gross_profit - total_expenses
+                data1 = [['Sales Revenue', pl_data[0][0]],
+                        ['COGS', pl_data[0][1]],
+                        ['Gross Profit', gross_profit],
+                        ['Payroll', pl_data[0][2]],
+                        ['Payroll Withholding', pl_data[0][3]],
+                        ['Medicare', pl_data[0][4]],
+                        ['Annual Expenses', pl_data[0][5]],
+                        ['Total Expenses', total_expenses],
+                        ['Earnings Before Taxes', ebt],
+                        ['Taxes', 0.20 * ebt],
+                        ['Net Income', ebt - 0.20*ebt]]
+                d1 = pd.DataFrame(data1, columns = ['Income Statement', 'Value']).style.set_precision(2)
+                st.dataframe(d1, height = 900)
     elif choice == "View Invoice History":
         st.subheader("View Invoice History")
         # View Invoice History
