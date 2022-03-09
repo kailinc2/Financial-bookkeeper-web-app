@@ -18,10 +18,12 @@ def init_db(conn: Connection):
     conn.execute('CREATE TABLE IF NOT EXISTS employeeTable(firstname TEXT, lastname TEXT, address1 TEXT, address2 TEXT, city TEXT, state TEXT, zipcode TEXT, ssn TEXT, withholding TEXT, salary TEXT)')
     conn.execute('CREATE TABLE IF NOT EXISTS customerTable(company TEXT, firstname TEXT, lastname TEXT, address1 TEXT, address2 TEXT, city TEXT, state TEXT, zipcode TEXT, price TEXT)')
     conn.execute('CREATE TABLE IF NOT EXISTS vendorTable(company TEXT, part TEXT, price TEXT, firstname TEXT, lastname TEXT, address1 TEXT, address2 TEXT, city TEXT, state TEXT, zipcode TEXT)')
+    #c.execute("UPDATE customerTable SET firstname = 'John', lastname = 'Tate' WHERE company = 'Brunswick'")
+    #c.execute("UPDATE employeeTable SET salary = 15000 WHERE firstname = 'King'")
     # BS
     #conn.execute('DROP TABLE bsTable')
-    #c.execute("UPDATE bsTable SET equipment = 10000")
-    #conn.execute("""DELETE FROM bsTable WHERE cash = 885264.5;""")
+    #c.execute("UPDATE bsTable SET inventory = 1000000")
+    #conn.execute("""DELETE FROM bsTable WHERE date = 2459677.5000;""")
     conn.execute('CREATE TABLE IF NOT EXISTS bsTable(cash REAL, receivable REAL, inventory REAL, building REAL, equipment REAL, payable REAL, notes_payable REAL, accurals REAL, mortgage REAL, date REAL)')
     # conn.execute("""INSERT INTO bsTable(cash, receivable, inventory, building, equipment, payable, notes_payable, accurals, mortgage, date)
     #                 VALUES (
@@ -55,72 +57,57 @@ def init_db(conn: Connection):
     conn.execute('CREATE TABLE IF NOT EXISTS payrollHistoryTable(date REAL, employee TEXT, salary REAL, disbursement REAL, withholding REAL, federal_tax REAL, social_security_tax REAL, medicare REAL, total_disbursement REAL, total_withholding REAL)')
     # conn.execute("""INSERT INTO payrollHistoryTable VALUES(
     #                 julianday('now', 'localtime'),
-    #                 'Colin',
-    #                 52000,
-    #                 35175,
-    #                 14825,
-    #                 11000,
-    #                 3100,
-    #                 725,
-    #                 35175,
-    #                 14825
+    #                 'King',
+    #                 10000,
+    #                 7035,
+    #                 2965,
+    #                 2200,
+    #                 620,
+    #                 145,
+    #                 7035,
+    #                 2965
     #                 )""")
 
 
     # Inventory
     #conn.execute('DROP TABLE inventoryTable')
     # c.execute("UPDATE inventoryTable SET quantity = 500 WHERE part = 'Bread'")
-    # c.execute("UPDATE inventoryTable SET value = 500 WHERE part = 'Bread'")
+    #c.execute("UPDATE inventoryTable SET value = 100000 WHERE part = 'Bread'")
     conn.execute('CREATE TABLE IF NOT EXISTS inventoryTable(Part TEXT, price_per_unit REAL, Quantity REAL, Value REAL, Reorder TEXT)')
-    # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
-    #                 VALUES (
-    #                 'Axles',
-    #                 0.01,
-    #                 330000,
-    #                 3300,
-    #                 'No')""")
-    #
-    # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
-    #                 VALUES (
-    #                 'Screw',
-    #                 0.02,
-    #                 48250,
-    #                 965,
-    #                 'No')""")
     # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
     #                 VALUES (
     #                 'Meat',
     #                 3.5,
-    #                 1000,
-    #                 3500,
+    #                 200000,
+    #                 700000,
     #                 'No')""")
     # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
     #                 VALUES (
     #                 'Cheese',
     #                 0.4,
-    #                 1000,
-    #                 400,
+    #                 200000,
+    #                 80000,
     #                 'No')""")
     # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
     #                 VALUES (
     #                 'Olive oil',
     #                 0.1,
-    #                 1000,
-    #                 100,
+    #                 200000,
+    #                 20000,
     #                 'No')""")
     # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
     #                 VALUES (
     #                 'Mayonnaise',
     #                 0.5,
-    #                 1000,
-    #                 500,
+    #                 200000,
+    #                 100000,
     #                 'No')""")
     # conn.execute("""INSERT INTO inventoryTable(Part, price_per_unit, Quantity, Value, Reorder)
     #                 VALUES (
     #                 'Bread',
     #                 1.0,
-    #                 500,
-    #                 1000,
+    #                 100000,
+    #                 100000,
     #                 'No')""")
 
     # Stock Units
@@ -129,7 +116,8 @@ def init_db(conn: Connection):
     # conn.execute("""INSERT INTO stockTable
     #                 VALUES (
     #                 100)""")
-    #c.execute("UPDATE stockTable SET stock_units = ?", (500,))
+    #c.execute("UPDATE stockTable SET stock_units = 50000")
+
     # Invoice History
     #conn.execute('DROP TABLE invoiceHistoryTable')
     conn.execute('CREATE TABLE IF NOT EXISTS invoiceHistoryTable(date REAL, customer TEXT, quantity REAL, price_per_unit REAL, total REAL)')
@@ -199,7 +187,7 @@ def get_bs_nearest(nearest_time):
     data = c.fetchall()
     return data
 def get_bs_net30(current_date):
-    c.execute("SELECT *, date(date) FROM bsTable ORDER BY abs(julianday(?, '+1 month') - date) LIMIT 1 ", (current_date,))
+    c.execute("SELECT *, date(date) FROM bsTable WHERE date = julianday(?, '+1 months') LIMIT 1", (current_date,))
     data = c.fetchall()
     return data
 
@@ -524,6 +512,10 @@ def main():
 
         if st.button("Net30: advance one month"):
             # Net30: Current date + 1 month
+            # get time right now
+            named_tuple = time.localtime()
+            time_string = time.strftime("%Y-%m-%d %H:%M:%S", named_tuple)
+            date_string = time.strftime("%Y-%m-%d", named_tuple)
 
             data = get_bs_nearest(time_string)
             cash = data[0][0]
@@ -539,10 +531,11 @@ def main():
 
             cash = cash + receivable - payable
             receivable, payable = 0, 0
+            # INSERT BS data after one month
             conn.execute('INSERT INTO bsTable(cash, receivable, inventory, building, equipment, payable, notes_payable, accurals, mortgage, date) VALUES (?,?,?,?,?,?,?,?,?,julianday(?, "+1 months"))', (cash, receivable, inventory, building, equipment, payable, notes_payable, accurals, mortgage, date))
             conn.commit()
 
-            data = get_bs_net30(date)
+            data = get_bs_net30(date) # note that input is current_date
             # data = get_the_last_bs_of_that_day("2022-02-26")
 
             # Display Net30 BS
@@ -572,7 +565,7 @@ def main():
             #st.write("View all BS records")
             # view all BS
             query = conn.execute("SELECT cash, receivable, inventory, building, equipment, payable, notes_payable, accurals, mortgage, date(date), time(date) FROM bsTable")
-            cols = [column[0] for column in query.description]
+            #cols = [column[0] for column in query.description]
             results = pd.DataFrame.from_records(data = query.fetchall(), columns = ["Cash", "Receivable", "Inventory", "Building", "equipment", "payable", "notes_payable", "accurals", "mortgage", "date", "time"])
             st.dataframe(results)
 
@@ -707,6 +700,11 @@ def main():
             c.execute("UPDATE stockTable SET stock_units = ?", (remain_stock_units,))
             conn.commit()
 
+            # Update inventory Table
+            c.execute("UPDATE inventoryTable SET quantity = quantity - ?", (purchase_num,))
+            c.execute("UPDATE inventoryTable SET value = quantity * price_per_unit")
+            conn.commit()
+
             # Start updating BS and PL
             # get time right now
             localtime = time.localtime()
@@ -742,7 +740,7 @@ def main():
             add_bs(
                    bs_data[0][0], # cash
                    bs_data[0][1] + invoice_price, # receivable + invoice_price
-                   bs_data[0][2], # inventory
+                   bs_data[0][2] - invoice_cogs, # inventory
                    bs_data[0][3], # building
                    bs_data[0][4], # equipment
                    bs_data[0][5], # payable
@@ -751,6 +749,7 @@ def main():
                    bs_data[0][8], # mortgage
                    time_string_invoice # date
                    )
+
             # get PL data before invoice
             pl_data = get_pl_nearest(time_string_invoice)
             with col2:
