@@ -20,10 +20,11 @@ def init_db(conn: Connection):
     conn.execute('CREATE TABLE IF NOT EXISTS vendorTable(company TEXT, part TEXT, price TEXT, firstname TEXT, lastname TEXT, address1 TEXT, address2 TEXT, city TEXT, state TEXT, zipcode TEXT)')
     #c.execute("UPDATE customerTable SET firstname = 'John', lastname = 'Tate' WHERE company = 'Brunswick'")
     #c.execute("UPDATE employeeTable SET salary = 15000 WHERE firstname = 'King'")
+    #c.execute("DELETE FROM employeeTable WHERE salary = '70000'")
     # BS
     #conn.execute('DROP TABLE bsTable')
     #c.execute("UPDATE bsTable SET inventory = 1000000")
-    #conn.execute("""DELETE FROM bsTable WHERE date = 2459677.5000;""")
+    #conn.execute("""DELETE FROM bsTable WHERE date = julianday('2022-04-10');""")
     conn.execute('CREATE TABLE IF NOT EXISTS bsTable(cash REAL, receivable REAL, inventory REAL, building REAL, equipment REAL, payable REAL, notes_payable REAL, accurals REAL, mortgage REAL, date REAL)')
     # conn.execute("""INSERT INTO bsTable(cash, receivable, inventory, building, equipment, payable, notes_payable, accurals, mortgage, date)
     #                 VALUES (
@@ -343,6 +344,7 @@ def main():
         selected_pay_employee = st.selectbox("Employee name", employee_first_name)
         # st.write(selected_pay_employee)
         if st.button("Pay employee"):
+            st.success("Paid successfully.")
             # get salary
             employee_info = get_salary(selected_pay_employee)
             salary = float(employee_info[0][0])
@@ -367,7 +369,7 @@ def main():
                 d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
                 data2 = [['Accounts Payable', bs_data[0][5]],
                         ['Notes Payable', bs_data[0][6]],
-                        ['Accurals', bs_data[0][7]],
+                        ['Accruals', bs_data[0][7]],
                         ['Total Current Liabilities', bs_data[0][5] + bs_data[0][6] + bs_data[0][7]],
                         ['Mortgage', bs_data[0][8]],
                         ['Total Long Term Debt', bs_data[0][8]],
@@ -441,7 +443,7 @@ def main():
                 d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
                 data2 = [['Accounts Payable', bs_data[0][5]],
                         ['Notes Payable', bs_data[0][6]],
-                        ['Accurals', bs_data[0][7]],
+                        ['Accruals', bs_data[0][7]],
                         ['Total Current Liabilities', bs_data[0][5] + bs_data[0][6] + bs_data[0][7]],
                         ['Mortgage', bs_data[0][8]],
                         ['Total Long Term Debt', bs_data[0][8]],
@@ -483,6 +485,8 @@ def main():
         time_string = time.strftime("%Y-%m-%d %H:%M:%S", named_tuple)
         date_string = time.strftime("%Y-%m-%d", named_tuple)
 
+
+
         data = get_bs_nearest(time_string)
         # data = get_the_last_bs_of_that_day("2022-02-26")
         #st.write(data)
@@ -499,7 +503,7 @@ def main():
         d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
         data2 = [['Accounts Payable', data[0][5]],
                 ['Notes Payable', data[0][6]],
-                ['Accurals', data[0][7]],
+                ['Accruals', data[0][7]],
                 ['Total Current Liabilities', data[0][5] + data[0][6] + data[0][7]],
                 ['Mortgage', data[0][8]],
                 ['Total Long Term Debt', data[0][8]],
@@ -516,6 +520,10 @@ def main():
             named_tuple = time.localtime()
             time_string = time.strftime("%Y-%m-%d %H:%M:%S", named_tuple)
             date_string = time.strftime("%Y-%m-%d", named_tuple)
+
+            # Delete previously stored net30 records
+            conn.execute("""DELETE FROM bsTable WHERE date = julianday(?, '+1 months');""",(date_string,))
+            conn.commit()
 
             data = get_bs_nearest(time_string)
             cash = data[0][0]
@@ -552,7 +560,7 @@ def main():
             d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
             data2 = [['Accounts Payable', data[0][5]],
                     ['Notes Payable', data[0][6]],
-                    ['Accurals', data[0][7]],
+                    ['Accruals', data[0][7]],
                     ['Total Current Liabilities', data[0][5] + data[0][6] + data[0][7]],
                     ['Mortgage', data[0][8]],
                     ['Total Long Term Debt', data[0][8]],
@@ -564,9 +572,9 @@ def main():
         if st.button("View all Balanced Sheet Records"):
             #st.write("View all BS records")
             # view all BS
-            query = conn.execute("SELECT cash, receivable, inventory, building, equipment, payable, notes_payable, accurals, mortgage, date(date), time(date) FROM bsTable")
+            query = conn.execute("SELECT date(date), cash, receivable, inventory, building, equipment, payable, notes_payable, accurals, mortgage, time(date) FROM bsTable")
             #cols = [column[0] for column in query.description]
-            results = pd.DataFrame.from_records(data = query.fetchall(), columns = ["Cash", "Receivable", "Inventory", "Building", "equipment", "payable", "notes_payable", "accurals", "mortgage", "date", "time"])
+            results = pd.DataFrame.from_records(data = query.fetchall(), columns = ["Date", "Cash", "Receivable", "Inventory", "Building", "equipment", "payable", "notes payable", "accurals", "mortgage", "time"])
             st.dataframe(results)
 
     elif choice == "View Income Statement":
@@ -603,7 +611,7 @@ def main():
         if st.button("View all Income Statement records"):
             #st.write("View all Income Statement records")
             # view all Income Statement
-            query = conn.execute("SELECT sales_revenue, cogs, payroll, payroll_withholding, medicare, annual_expenses, date(date), time(date) FROM plTable")
+            query = conn.execute("SELECT date(date), sales_revenue, cogs, payroll, payroll_withholding, medicare, annual_expenses, time(date) FROM plTable")
             cols = [column[0] for column in query.description]
             results = pd.DataFrame.from_records(data = query.fetchall(), columns = cols)
             st.dataframe(results)
@@ -726,7 +734,7 @@ def main():
                 d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
                 data2 = [['Accounts Payable', bs_data[0][5]],
                         ['Notes Payable', bs_data[0][6]],
-                        ['Accurals', bs_data[0][7]],
+                        ['Accruals', bs_data[0][7]],
                         ['Total Current Liabilities', bs_data[0][5] + bs_data[0][6] + bs_data[0][7]],
                         ['Mortgage', bs_data[0][8]],
                         ['Total Long Term Debt', bs_data[0][8]],
@@ -804,7 +812,7 @@ def main():
                 d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
                 data2 = [['Accounts Payable', bs_data[0][5]],
                         ['Notes Payable', bs_data[0][6]],
-                        ['Accurals', bs_data[0][7]],
+                        ['Accruals', bs_data[0][7]],
                         ['Total Current Liabilities', bs_data[0][5] + bs_data[0][6] + bs_data[0][7]],
                         ['Mortgage', bs_data[0][8]],
                         ['Total Long Term Debt', bs_data[0][8]],
@@ -907,7 +915,7 @@ def main():
                 d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
                 data2 = [['Accounts Payable', bs_data[0][5]],
                         ['Notes Payable', bs_data[0][6]],
-                        ['Accurals', bs_data[0][7]],
+                        ['Accruals', bs_data[0][7]],
                         ['Total Current Liabilities', bs_data[0][5] + bs_data[0][6] + bs_data[0][7]],
                         ['Mortgage', bs_data[0][8]],
                         ['Total Long Term Debt', bs_data[0][8]],
@@ -982,7 +990,7 @@ def main():
                 d1 = pd.DataFrame(data1, columns = ['Current Asset', 'Value'])
                 data2 = [['Accounts Payable', bs_data[0][5]],
                         ['Notes Payable', bs_data[0][6]],
-                        ['Accurals', bs_data[0][7]],
+                        ['Accruals', bs_data[0][7]],
                         ['Total Current Liabilities', bs_data[0][5] + bs_data[0][6] + bs_data[0][7]],
                         ['Mortgage', bs_data[0][8]],
                         ['Total Long Term Debt', bs_data[0][8]],
