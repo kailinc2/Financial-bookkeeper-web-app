@@ -249,7 +249,7 @@ def view_all_inventory():
 
 
 def main():
-    st.title("TE566 Final Project")
+    st.title("Bookkeeper Web Application")
     init_db(conn)
     menu = ["View Balanced Sheet", "View Income Statement",
             "View Employees", "Add Employees",
